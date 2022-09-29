@@ -1,30 +1,12 @@
 const five = require("johnny-five");
+const fs = require('fs');
+const path = require('path');
+
+const saveFilePath = path.join(__dirname, '/data/save.json');
 
 var board = new five.Board({ repl: false });
 
 board.on("ready", function() {
-  var sensors = {
-    red: {
-      value: 0,
-      count: 0
-    },
-    // green: {
-    //   value: 0,
-    //   count: 0
-    // },
-    // blue: {
-    //   value: 0,
-    //   count: 0
-    // },
-    door: {
-      value: 0,
-      count: 0
-    },
-    // chair: {
-    //   value: 0,
-    //   count: 0
-    // },
-  }
 
   function saveSensorValue(key, value) {
     if(sensors[key].value != value) {
@@ -48,5 +30,33 @@ board.on("ready", function() {
     console.log("current value: " + String(sensors.door.value));
     console.log("total count: " + String(sensors.door.count));
     console.log("---");
+
+    fs.writeFileSync(saveFilePath, JSON.stringify(sensors));
   });
 });
+
+var sensors;
+
+if (fs.existsSync(saveFilePath)) {
+  let rawdata = fs.readFileSync(saveFilePath);
+  sensors = JSON.parse(rawdata);
+
+  for (var key in sensors) {
+    sensors[key].value = 0;
+  };
+
+  console.log('save file loaded!');
+} else {
+  sensors = {};
+
+  for (var key of ["red", "green", "blue", "door", "chair"]) {
+    sensors[key] = {
+      value: 0,
+      count: 0
+    };
+  };
+
+  console.log('no save file found, using default values!');
+}
+
+console.log(sensors);
