@@ -1,0 +1,14 @@
+{
+  "name": "input-output",
+  "version": "0.0.0",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "coffeescript": "^2",
+    "johnny-five": "^2.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.13"
+  }
+}
