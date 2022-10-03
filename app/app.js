@@ -1,62 +1,233 @@
+const { execSync } = require("child_process");
 const five = require("johnny-five");
 const fs = require('fs');
 const path = require('path');
 
-const saveFilePath = path.join(__dirname, '/data/save.json');
+const saveFilePath = path.join(__dirname, 'data/save.json');
+
+// config
+const readVolumeDecrease = 15;
+
+var cycle = 0,
+    sensors,
+    audioFiles;
+
+function saveSensorValue(key, value) {
+  if(sensors[key].value != value) {
+    sensors[key].value = value;
+
+    if(sensors[key].value == 1) {
+      sensors[key].currentCount++;
+      sensors[key].totalCount++;
+    }
+  }
+}
+
+function resetSensors() {
+  for (var key in sensors) {
+    sensors[key].value = 0;
+    sensors[key].currentCount = 0;
+  }
+}
+
+function delay(seconds) {
+  const startPoint = new Date().getTime()
+  console.log(">> waiting for " + String(seconds) + " seconds");
+  while (new Date().getTime() - startPoint <= seconds * 1000) {}
+}
+
+function read(value) {
+  console.log(">> reading " + String(value));
+  execSync("amixer -D pulse sset Master " + String(readVolumeDecrease) + "%-")
+  execSync("echo '" + String(value) + "' | festival --tts");
+  execSync("amixer -D pulse sset Master " + String(readVolumeDecrease) + "%+")
+}
+
+function playFile(filepath) {
+  console.log(">> playing " + filepath);
+  execSync('play ' + filepath, { stdio: "pipe" })
+}
+
+var countingFilenames = {
+  current: {
+    red: "'Počet interakcí bodu červená.mp3'",
+    green: "'Počet interakcí bodu zelená.mp3'",
+    blue: "'Počet interakcí bodu modrá.mp3'",
+    entry: "'Počet interakcí bodu vstup.mp3'",
+    chair: "'Počet interakcí bodu židle.mp3'",
+  },
+  total: {
+    red: "'Celkový počet interakcí bodu červená.mp3'",
+    green: "'Celkový počet interakcí bodu zelená.mp3'",
+    blue: "'Celkový počet interakcí bodu modrá.mp3'",
+    entry: "'Celkový počet interakcí bodu vstup.mp3'",
+    chair: "'Celkový počet interakcí bodu židle.mp3'",
+  }
+}
+
+for (var h in countingFilenames) {
+  for (var key in countingFilenames[h]) {
+    countingFilenames[h][key] = path.join(__dirname, "audio/counting", countingFilenames[h][key]);
+  }
+}
+
+function readCounts(callback) {
+  for (var key in countingFilenames.current) {
+    playFile(countingFilenames.current[key])
+    delay(0.3);
+    read(sensors[key].currentCount)
+    delay(0.3);
+  }
+
+  for (var key in countingFilenames.total) {
+    playFile(countingFilenames.total[key])
+    delay(0.3);
+    read(sensors[key].totalCount)
+    delay(0.3);
+  }
+}
+
+function selectAudioKey() {
+  var activated = 0;
+  for (var key in sensors) {
+    if (sensors[key].currentCount > 0) {
+      activated++;
+    }
+  }
+
+  if (activated == 5) {
+    return "all"
+  } else if (activated == 0) {
+    return "nothing"
+  } else if (activated == 1 && sensors["entry"].currentCount > 0) {
+    return "only_entry"
+  } else {
+    return "other"
+  }
+}
+
+function loadAudio() {
+  audioFiles = {}
+
+  for (var key of ["all", "nothing", "only_entry", "other"]) {
+    var files = [];
+    var audioFolderPath = path.join(__dirname, "audio", key);
+    fs.readdirSync(audioFolderPath).forEach(function (file) {
+      if (/.*\.mp3$/.test(file)) {
+        files.push(path.join(audioFolderPath, file));
+      }
+    });
+
+    audioFiles[key] = {
+      index: 0,
+      files: files
+    }
+  }
+
+  console.log("audio files loaded!");
+  console.log(audioFiles);
+  console.log("---");
+}
+
+function playAudio() {
+  var key = selectAudioKey();
+  var filepath = audioFiles[key].files[audioFiles[key].index];
+
+  playFile(filepath);
+
+  audioFiles[key].index++;
+  if (audioFiles[key].index >= audioFiles[key].files.length) {
+    audioFiles[key].index = 0;
+  }
+}
+
+function loadSensors() {
+  if (fs.existsSync(saveFilePath)) {
+    let rawdata = fs.readFileSync(saveFilePath);
+    sensors = JSON.parse(rawdata);
+    resetSensors();
+
+    console.log('save file loaded!');
+  } else {
+    sensors = {};
+
+    for (var key of ["red", "green", "blue", "entry", "chair"]) {
+      sensors[key] = {
+        value: 0,
+        currentCount: 0,
+        totalCount: 0
+      };
+    }
+
+    console.log('no save file found, using default values!');
+  }
+
+  console.log(sensors);
+  console.log("---");
+}
 
 var board = new five.Board({ repl: false });
 
 board.on("ready", function() {
-
-  function saveSensorValue(key, value) {
-    if(sensors[key].value != value) {
-      sensors[key].value = value;
-
-      if(sensors[key].value == 1) {
-        sensors[key].count++;
-      }
-    }
-  }
-
-  var doorSensor = new five.Pin(2);
-  doorSensor.read(function(error, value) {
-    saveSensorValue("door", value ^ 1)
+  // laser sensor
+  var sensorPin = new five.Pin(2);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("entry", value ^ 1)
   });
 
-  this.loop(2000, function() {
-    // read(sensors.red.value);
+  // IR proximity sensor
+  sensorPin = new five.Pin(3);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("chair", value ^ 1)
+  });
 
-    console.log("door");
-    console.log("current value: " + String(sensors.door.value));
-    console.log("total count: " + String(sensors.door.count));
-    console.log("---");
+  // PIR motion sensors
+  sensorPin = new five.Pin(4);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("red", value)
+  });
 
-    fs.writeFileSync(saveFilePath, JSON.stringify(sensors));
+  sensorPin = new five.Pin(5);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("green", value)
+  });
+
+  sensorPin = new five.Pin(6);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("blue", value)
   });
 });
 
-var sensors;
+function playCycle() {
+  switch (cycle) {
+    case 0:
+      console.log("cycle 1: waiting for inputs");
+      delay(1);
+      break;
+    case 1:
+      console.log("cycle 2: reading out interaction counts");
+      readCounts();
+      delay(1);
+      break;
+    case 2:
+      console.log("cycle 3: playing a selected file");
+      playAudio();
+      resetSensors();
 
-if (fs.existsSync(saveFilePath)) {
-  let rawdata = fs.readFileSync(saveFilePath);
-  sensors = JSON.parse(rawdata);
+      fs.writeFileSync(saveFilePath, JSON.stringify(sensors));
+      break;
+  }
 
-  for (var key in sensors) {
-    sensors[key].value = 0;
-  };
-
-  console.log('save file loaded!');
-} else {
-  sensors = {};
-
-  for (var key of ["red", "green", "blue", "door", "chair"]) {
-    sensors[key] = {
-      value: 0,
-      count: 0
-    };
-  };
-
-  console.log('no save file found, using default values!');
+  if (cycle == 2) {
+    cycle = 0;
+  } else {
+    cycle++;
+  }
 }
 
-console.log(sensors);
+loadAudio()
+loadSensors()
+
+while (true) {
+  playCycle();
+}
