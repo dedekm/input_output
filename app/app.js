@@ -6,7 +6,13 @@ const path = require('path');
 const saveFilePath = path.join(__dirname, 'data/save.json');
 
 // config
-const readVolumeDecrease = 15;
+const readVolumeDecrease = 15,
+      readingPause = 60,
+      entryPin = 2,
+      chairPin = 3,
+      redPin = 5,
+      greenPin = 6,
+      bluePin = 7;
 
 var cycle = 0,
     sensors,
@@ -166,48 +172,17 @@ function loadSensors() {
   console.log("---");
 }
 
-var board = new five.Board({ repl: false });
-
-board.on("ready", function() {
-  // laser sensor
-  var sensorPin = new five.Pin(2);
-  sensorPin.read(function(error, value) {
-    saveSensorValue("entry", value ^ 1)
-  });
-
-  // IR proximity sensor
-  sensorPin = new five.Pin(3);
-  sensorPin.read(function(error, value) {
-    saveSensorValue("chair", value ^ 1)
-  });
-
-  // PIR motion sensors
-  sensorPin = new five.Pin(4);
-  sensorPin.read(function(error, value) {
-    saveSensorValue("red", value)
-  });
-
-  sensorPin = new five.Pin(5);
-  sensorPin.read(function(error, value) {
-    saveSensorValue("green", value)
-  });
-
-  sensorPin = new five.Pin(6);
-  sensorPin.read(function(error, value) {
-    saveSensorValue("blue", value)
-  });
-});
-
 function playCycle() {
   switch (cycle) {
     case 0:
-      console.log("cycle 1: waiting for inputs");
-      delay(1);
+      console.log("cycle 1: waiting for inputs (" + String(readingPause) + "seconds)");
+      setTimeout(nextCycle, readingPause * 1000)
       break;
     case 1:
       console.log("cycle 2: reading out interaction counts");
       readCounts();
       delay(1);
+      nextCycle()
       break;
     case 2:
       console.log("cycle 3: playing a selected file");
@@ -215,19 +190,60 @@ function playCycle() {
       resetSensors();
 
       fs.writeFileSync(saveFilePath, JSON.stringify(sensors));
+
+      nextCycle()
       break;
   }
+}
 
+function nextCycle() {
   if (cycle == 2) {
     cycle = 0;
   } else {
     cycle++;
   }
+
+  playCycle();
 }
 
 loadAudio()
 loadSensors()
 
-while (true) {
-  playCycle();
-}
+var board = new five.Board({ repl: false });
+
+board.on("ready", function() {
+  // laser sensor
+  var sensorPin = new five.Pin(entryPin);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("entry", value ^ 1)
+  });
+
+  // IR proximity sensor
+  sensorPin = new five.Pin(chairPin);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("chair", value ^ 1)
+  });
+
+  // PIR motion sensors
+  sensorPin = new five.Pin(redPin);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("red", value)
+  });
+
+  sensorPin = new five.Pin(greenPin);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("green", value)
+  });
+
+  sensorPin = new five.Pin(bluePin);
+  sensorPin.read(function(error, value) {
+    saveSensorValue("blue", value)
+  });
+
+  this.loop(2000, function() {
+    console.log(">>> reading values");
+    console.log(sensors);
+  });
+});
+
+playCycle();
