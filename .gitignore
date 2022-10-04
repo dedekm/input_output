@@ -1,3 +1,4 @@
 app/node_modules
 app/data/save.json
 app/audio/**/*.mp3
+!app/audio/counting/*
