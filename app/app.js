@@ -101,7 +101,7 @@ function selectAudioKey() {
     }
   }
 
-  if (activated == 5) {
+  if (activated == 5 || (activated == 4 && sensors["entry"].currentCount == 0)) {
     return "all"
   } else if (activated == 0) {
     return "nothing"
@@ -175,7 +175,7 @@ function loadSensors() {
 function playCycle() {
   switch (cycle) {
     case 0:
-      console.log("cycle 1: waiting for inputs (" + String(readingPause) + "seconds)");
+      console.log("cycle 1: waiting for inputs (" + String(readingPause) + " seconds)");
       setTimeout(nextCycle, readingPause * 1000)
       break;
     case 1:
@@ -208,6 +208,14 @@ function nextCycle() {
 
 loadAudio()
 loadSensors()
+resetSensors()
+
+if (process.env.PRODUCTION) {
+  console.log("running in production enviroment");
+  delay(5);
+  read("Startuji program");
+  console.log("---");
+}
 
 var board = new five.Board({ repl: false });
 
@@ -244,6 +252,6 @@ board.on("ready", function() {
     console.log(">>> reading values");
     console.log(sensors);
   });
-});
 
-playCycle();
+  playCycle();
+});
