@@ -51,7 +51,13 @@ function read(value) {
 
 function playFile(filepath) {
   console.log(">> playing " + filepath);
-  execSync('play ' + filepath, { stdio: "pipe" })
+
+  if (process.env.USE_MPG) {
+
+    execSync('mpg321 ' + filepath, { stdio: "pipe" })
+  } else {
+    execSync('play ' + filepath, { stdio: "pipe" })
+  }
 }
 
 var countingFilenames = {
